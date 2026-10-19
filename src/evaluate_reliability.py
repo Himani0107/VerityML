@@ -164,11 +164,20 @@ calibrated_model = CalibratedClassifierCV(
 )
 
 calibrated_model.fit(X_train, y_train)
+# 9. Train an isotonic-calibrated model
+isotonic_model = CalibratedClassifierCV(
+    estimator=create_model_pipeline(),
+    method="isotonic",
+    cv=5,
+)
+
+isotonic_model.fit(X_train, y_train)
 
 
 # 9. Compare probabilities on validation data
 baseline_probs = baseline_model.predict_proba(X_val)[:, 1]
 calibrated_probs = calibrated_model.predict_proba(X_val)[:, 1]
+isotonic_probs = isotonic_model.predict_proba(X_val)[:, 1]
 
 evaluate_probabilities(
     "Baseline Logistic Regression",
@@ -182,6 +191,12 @@ evaluate_probabilities(
     calibrated_probs,
 )
 
+evaluate_probabilities(
+    "Isotonic-Calibrated Logistic Regression",
+    y_val,
+    isotonic_probs,
+)
+
 print("\n=== BASELINE CALIBRATION REPORT ===")
 baseline_ece, baseline_report = calibration_report(
     y_val, baseline_probs
@@ -192,6 +207,11 @@ calibrated_ece, calibrated_report = calibration_report(
     y_val, calibrated_probs
 )
 
+print("\n=== ISOTONIC CALIBRATION REPORT ===")
+isotonic_ece, isotonic_report = calibration_report(
+    y_val, isotonic_probs
+)
+
 
 # 10. Plot reliability diagrams
 plt.figure(figsize=(8, 6))
@@ -199,6 +219,7 @@ plt.figure(figsize=(8, 6))
 for name, probabilities in [
     ("Baseline", baseline_probs),
     ("Sigmoid calibrated", calibrated_probs),
+    ("Isotonic calibrated", isotonic_probs),
 ]:
     actual_fraction, mean_probability = calibration_curve(
         y_val,
@@ -230,7 +251,38 @@ plt.tight_layout()
 
 output_path = Path("reports/reliability_comparison.png")
 output_path.parent.mkdir(parents=True, exist_ok=True)
-plt.savefig(output_path, dpi=150)
-print(f"\nReliability plot saved to: {output_path}")
+plt.savefig(
+    "reports/reliability_comparison.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+print("Reliability plot saved successfully.")
 
-plt.show()
+plt.close()
+
+# Final evaluation on the untouched test set
+# Model selection was based on validation results.
+
+baseline_test_probs = baseline_model.predict_proba(X_test)[:, 1]
+isotonic_test_probs = isotonic_model.predict_proba(X_test)[:, 1]
+
+evaluate_probabilities(
+    "FINAL TEST: Baseline Logistic Regression",
+    y_test,
+    baseline_test_probs,
+)
+
+evaluate_probabilities(
+    "FINAL TEST: Isotonic-Calibrated Logistic Regression",
+    y_test,
+    isotonic_test_probs,
+)
+
+print("\n=== FINAL TEST CALIBRATION REPORT ===")
+
+test_ece, test_report = calibration_report(
+    y_test,
+    isotonic_test_probs,
+)
+
+print("\nFinal test evaluation completed.")
